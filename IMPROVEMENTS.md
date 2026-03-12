@@ -83,7 +83,53 @@ With cosine annealing, the model continues improving as LR decays smoothly to ne
 
 ## Medium Effort (Code Modifications)
 
-### 4. **Larger Model Capacity**
+### 4. **Generate More Synthetic Training Data** ⭐ (High ROI)
+
+**Current:** 3028 images in combined_v4
+**Recommended:** 10,000-30,000 images
+
+**Why it works:**
+- More data = better generalization
+- Synthetic data is cheap to generate
+- Can target failure cases (hard negatives)
+- Increases pattern diversity
+
+**Strategies:**
+
+**a) Increase Dataset Size (10x)**
+- Generate 30,000 synthetic images
+- Vary: patterns, layouts, colors, noise levels
+- Include edge cases: overlapping patterns, partial patterns, distortions
+
+**b) Targeted Data Generation**
+- Analyze failure cases from real PDF evaluation
+- Generate synthetic data that mimics those failures
+- Examples: dense patterns, small patterns, low contrast
+
+**c) Data Quality Improvements**
+- More realistic PDF rendering
+- Better pattern variation
+- Authentic noise/artifacts
+- Varied fonts and layouts
+
+**Implementation:**
+```bash
+# Generate 10x more data with your existing pipeline
+# Then retrain:
+python train_pattern_segmentation.py \
+    --coco-dir ~/combined_v10 \
+    --images-dir ~/combined_v10 \
+    --batch-size 64 \
+    --epochs 50
+```
+
+**Expected improvement:** +3-5% IoU → **0.93-0.95 IoU**
+
+**Bonus:** Better real-world performance if synthetic data mimics real PDF characteristics
+
+---
+
+### 6. **Larger Model Capacity**
 
 **Current:** `ref_feature_dim=512` (~58M parameters)
 **Recommended:** `ref_feature_dim=768` (~90M) or `1024` (~130M)
@@ -106,7 +152,7 @@ python train_pattern_segmentation.py \
 
 ---
 
-### 5. **Enhanced Data Augmentation**
+### 7. **Enhanced Data Augmentation**
 
 **Current augmentations:**
 - Horizontal/vertical flips (50%)
@@ -154,7 +200,7 @@ self.transform = A.Compose([
 
 ---
 
-### 6. **Loss Function Tuning**
+### 8. **Loss Function Tuning**
 
 **Current:** `bce_weight=0.5, dice_weight=0.5`
 
@@ -173,7 +219,7 @@ self.transform = A.Compose([
 
 ## Advanced Techniques (More Work)
 
-### 7. **Test-Time Augmentation (TTA)**
+### 9. **Test-Time Augmentation (TTA)**
 
 Apply augmentations during inference, average predictions:
 
@@ -207,7 +253,7 @@ def predict_with_tta(model, image, reference):
 
 ---
 
-### 8. **Model Ensembling**
+### 10. **Model Ensembling**
 
 Train 3-5 models with:
 - Different random seeds
@@ -221,7 +267,7 @@ Average their predictions during inference.
 
 ---
 
-### 9. **Self-Training / Pseudo-Labeling**
+### 11. **Self-Training / Pseudo-Labeling**
 
 1. Train on labeled data
 2. Predict on unlabeled real PDFs
@@ -237,7 +283,7 @@ Average their predictions during inference.
 
 ---
 
-### 10. **Architecture Improvements**
+### 12. **Architecture Improvements**
 
 **Upgrade Reference Encoder:**
 - ResNet50 → ResNet101 (more capacity)
@@ -263,6 +309,14 @@ Average their predictions during inference.
 3. **Loss tuning:** Test different BCE/Dice ratios
 
 **Target:** 0.90 → **0.92-0.93 IoU**
+
+### Phase 1.5: Data Generation (2-3 days)
+
+1. **Generate 10x more synthetic data:** 30,000 images
+2. **Target failure cases:** Analyze low-IoU samples, generate similar patterns
+3. **Retrain with larger dataset**
+
+**Target:** 0.92-0.93 → **0.93-0.95 IoU**
 
 ### Phase 2: Model Scaling (3-4 days)
 
