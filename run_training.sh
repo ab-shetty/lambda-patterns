@@ -1,15 +1,19 @@
 #!/bin/bash
 # Training script for Lambda Cloud
-
-# Example usage with your Kaggle-style paths:
-# Adjust these paths to match your Lambda Cloud setup
-
-COCO_DIR="/path/to/combined_v4"
-IMAGES_DIR="/path/to/combined_v4"
+#
+# By default the script downloads combined_v4.zip from HuggingFace automatically.
+# Set HF_TOKEN env var if the dataset is gated:
+#   export HF_TOKEN=hf_...
+#
+# To use a locally extracted dataset instead, uncomment and set the paths below:
+# COCO_DIR="/path/to/combined_v4"
+# IMAGES_DIR="/path/to/combined_v4"
+# and add:  --coco-dir "$COCO_DIR" --images-dir "$IMAGES_DIR" \
 
 python train_pattern_segmentation.py \
-    --coco-dir "$COCO_DIR" \
-    --images-dir "$IMAGES_DIR" \
+    --hf-repo abshetty/combined_v4 \
+    --hf-filename combined_v4.zip \
+    --data-dir ./data \
     --batch-size 8 \
     --epochs 22 \
     --lr 1e-4 \
