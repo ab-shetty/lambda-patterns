@@ -1,7 +1,17 @@
 # Model Improvement Strategies
 
-Current performance: **0.8993 validation IoU** (89.93%)
-Real-world performance: **0.75 median IoU** on real PDFs
+## Training History
+
+| Run | Dataset | Epochs | Best Val IoU | Best F1 | Time | Notes |
+|-----|---------|--------|-------------|---------|------|-------|
+| Run 1 | 3K images | 22 | 0.8993 | 0.9337 | ~7.5hr | Baseline, step_size=8 |
+| Run 2 | 15K images | 7 (abandoned) | 0.9174 | 0.9448 | - | Too slow, step_size=8 |
+| **Run 3** | **15K images** | **18** | **0.9346** | **0.9565** | **~3.3hr** | **step_size=5 ✅** |
+
+**Current best: 0.9346 validation IoU (93.46%)**
+Real-world performance: **0.75 median IoU** on real PDFs (automatic patch selection)
+
+**Key finding from Run 3:** Model plateaus at ~0.934-0.935 with current architecture and 15K dataset — train and val IoU both flatline after epoch 11. To push past 0.935, need more data or a larger model.
 
 This document outlines strategies to push performance higher, leveraging the GH200's massive compute capabilities.
 
@@ -9,75 +19,32 @@ This document outlines strategies to push performance higher, leveraging the GH2
 
 ## Quick Wins (Minimal Code Changes)
 
-### 1. **Increase Batch Size** ⭐ (Easiest, Likely +2-3% IoU)
+### 1. **Batch Size & Data Loading** ✅ (Settled)
 
-**Current:** `batch_size=4` (default)
-**Available:** 480GB GPU memory
-**Recommended:** `batch_size=64` or even `128`
+- `batch_size=16` — max before OOM on GH200 480GB due to cross-attention at 128×128 resolution
+- `num_workers=8` — halved epoch time from 23 min → 11 min
+- `image_size=512` — keeping full resolution for quality
 
-```bash
-python train_pattern_segmentation.py \
-    --coco-dir ~/combined_v4 \
-    --images-dir ~/combined_v4 \
-    --batch-size 64 \
-    --epochs 30 \
-    --ref-feature-dim 512
-```
-
-**Why it works:**
-- Larger batches = better gradient estimates
-- More stable batch normalization statistics
-- Better convergence to global minimum
-- GH200's massive memory is underutilized at batch_size=4
-
-**Expected improvement:** 0.90 → **0.92 IoU**
+This is the settled configuration. No further tuning needed here.
 
 ---
 
-### 2. **Better Learning Rate Schedule**
+### 2. **LR Schedule Tuning** ✅ (Done — confirmed working)
 
-**Current:** StepLR with `gamma=0.2` every 8 epochs
-**Recommended:** Cosine Annealing with Warmup
+**Was:** `step_size=8, gamma=0.2` (drops at epochs 8, 16)
+**Now:** `step_size=5, gamma=0.2` (drops at epochs 4, 9, 14) — use `--step-size 5`
 
-**Benefits:**
-- Smooth learning rate decay (vs sharp steps)
-- Warmup prevents early overfitting
-- Better final convergence
+Run 3 confirmed this hits the natural plateau points perfectly with 15K images.
 
-**Implementation:**
-```python
-from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
-
-# Warmup for 5 epochs
-warmup_scheduler = LinearLR(
-    optimizer, start_factor=0.1, total_iters=5
-)
-
-# Cosine decay for remaining epochs
-cosine_scheduler = CosineAnnealingLR(
-    optimizer, T_max=35, eta_min=1e-7
-)
-
-# Combine
-scheduler = SequentialLR(
-    optimizer,
-    schedulers=[warmup_scheduler, cosine_scheduler],
-    milestones=[5]
-)
-```
-
-**Expected improvement:** +1-2% IoU → **0.91-0.92 IoU**
+**Still to try:** Cosine Annealing with Warmup for smoother decay. May squeeze +0.5% IoU.
 
 ---
 
-### 3. **Train Longer**
+### 3. **Epoch Count**
 
-**Current:** 22 epochs
-**Recommended:** 30-40 epochs
+**Finding from Run 3:** Model hard-plateaus at ~0.934 train and val IoU after epoch 11. More epochs yield no gains — the ceiling is the architecture/dataset, not training time.
 
-With cosine annealing, the model continues improving as LR decays smoothly to near-zero. Training stopped at epoch 22 but loss was still decreasing.
-
-**Expected improvement:** +0.5-1% IoU
+**Recommendation:** 16-18 epochs with step_size=5 is the sweet spot for 15K images. Don't go longer without changing something else (more data or larger model).
 
 ---
 
@@ -302,52 +269,56 @@ Average their predictions during inference.
 
 ## Recommended Action Plan
 
-### Phase 1: Quick Experiments (1-2 days)
+### Phase 1: Quick Experiments ✅ DONE
 
-1. **Batch size sweep:** Try 16, 32, 64, 128
-2. **Longer training:** 40 epochs with cosine LR
-3. **Loss tuning:** Test different BCE/Dice ratios
+1. ~~Batch size sweep~~ — capped at 16 (OOM from cross-attention)
+2. ✅ `step_size=5`, 18 epochs → **0.9346 val IoU**
+3. ✅ `num_workers=8` → 2x faster training
+4. Loss tuning (BCE/Dice ratio) — **not yet tried**
 
-**Target:** 0.90 → **0.92-0.93 IoU**
+**Achieved:** 0.90 → **0.9346 IoU** ✅
 
-### Phase 1.5: Data Generation (2-3 days)
+### Phase 1.5: Data Generation (next step)
 
-1. **Generate 10x more synthetic data:** 30,000 images
-2. **Target failure cases:** Analyze low-IoU samples, generate similar patterns
-3. **Retrain with larger dataset**
+1. **Generate 30,000 synthetic images** (2x current)
+2. **Target failure cases:** Use low-IoU visualizations to identify gaps
+3. **Retrain:** `--batch-size 16 --epochs 18 --step-size 5`
 
-**Target:** 0.92-0.93 → **0.93-0.95 IoU**
+**Target:** 0.9346 → **0.95+ IoU**
+**Why:** Model has plateaued at current data ceiling — more data is the clearest path forward.
 
-### Phase 2: Model Scaling (3-4 days)
+### Phase 2: Model Scaling
 
-1. **Larger model:** `ref_feature_dim=768`
-2. **Enhanced augmentation**
-3. **TTA for evaluation**
+1. **Larger model:** `--ref-feature-dim 768`
+2. **Enhanced augmentation** (color jitter, noise, elastic transforms)
+3. **TTA for evaluation** (no retraining needed, free +2-4%)
 
-**Target:** 0.92-0.93 → **0.94-0.95 IoU**
+**Target:** 0.95 → **0.96-0.97 IoU**
 
 ### Phase 3: Advanced (1 week)
 
 1. **Self-training on real PDFs**
 2. **Model ensemble**
-3. **Architecture search**
+3. **Architecture improvements** (ResNet101, more attention heads)
 
-**Target:** 0.94-0.95 → **0.95-0.96+ IoU**
+**Target:** 0.96-0.97 → **0.97+ IoU**
 
 ---
 
 ## Hardware Utilization
 
-### Current Usage:
-- Batch size: 4
-- GPU memory: ~10-15GB / 480GB (**3% utilization!**)
-- Training time: ~5 min/epoch
+### Current Usage (Run 3):
+- Batch size: 16 (max before OOM — constrained by cross-attention)
+- num_workers: 8
+- GPU memory: ~30-40GB / 480GB (~8% utilization)
+- Training time: **~11 min/epoch** (~3.3hr for 18 epochs)
 
-### Optimized Usage:
-- Batch size: 128
-- GPU memory: ~200-250GB / 480GB (50% utilization)
-- Training time: ~8-10 min/epoch
-- **Better convergence, higher final accuracy**
+### Why OOM at batch_size=16 Despite 480GB:
+Cross-attention in dec2 at 128×128 resolution generates attention matrices ~3GB per forward pass, plus gradients. Memory scales with batch size faster than expected.
+
+### Settled Configuration:
+- `batch_size=16`, `image_size=512`, `num_workers=8`
+- Focus improvements on data and architecture, not hardware tuning
 
 ---
 
@@ -355,10 +326,11 @@ Average their predictions during inference.
 
 | Configuration | Val IoU | Real PDF IoU | Effort |
 |---------------|---------|--------------|--------|
-| **Current** | 0.90 | 0.75 | - |
-| Phase 1 (Quick wins) | 0.92-0.93 | 0.78-0.80 | Low |
-| Phase 2 (Model scaling) | 0.94-0.95 | 0.82-0.85 | Medium |
-| Phase 3 (Advanced) | 0.95-0.96+ | 0.85-0.88+ | High |
+| Run 1 (3K images) | 0.8993 | ~0.75 | - |
+| **Run 3 (15K images)** | **0.9346** | **~0.80?** | - |
+| Phase 1.5 (30K images) | 0.95+ | 0.83-0.86 | Low |
+| Phase 2 (larger model + augmentation) | 0.96-0.97 | 0.86-0.89 | Medium |
+| Phase 3 (self-training + ensemble) | 0.97+ | 0.89+ | High |
 
 ---
 
