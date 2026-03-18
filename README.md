@@ -13,6 +13,7 @@ This repository contains a production-ready training pipeline for pattern segmen
 
 ## Features
 
+- ✅ Auto-downloads dataset from HuggingFace (`abshetty/combined_v4`)
 - ✅ Multi-GPU training (automatic DataParallel)
 - ✅ COCO format dataset support
 - ✅ Comprehensive data augmentation
@@ -22,6 +23,12 @@ This repository contains a production-ready training pipeline for pattern segmen
 - ✅ Flexible command-line interface
 - ✅ Visualization utilities
 
+## Dataset
+
+Training uses the [abshetty/combined_v4](https://huggingface.co/datasets/abshetty/combined_v4) dataset hosted on HuggingFace. The script downloads and extracts `combined_v4.zip` automatically on first run — no manual data setup required.
+
+To use a locally extracted copy instead, pass `--coco-dir` and `--images-dir` directly (see [Usage](#usage)).
+
 ## Quick Start
 
 ### 1. Install Dependencies
@@ -30,34 +37,36 @@ This repository contains a production-ready training pipeline for pattern segmen
 pip install -r requirements.txt
 ```
 
-### 2. Test Your Setup
-
-```bash
-python test_setup.py --coco-dir /path/to/data --images-dir /path/to/data
-```
-
-### 3. Configure Training
-
-Edit `run_training.sh` to set your data paths:
-
-```bash
-nano run_training.sh
-```
-
-### 4. Start Training
+### 2. Start Training
 
 ```bash
 ./run_training.sh
 ```
 
+The dataset will be downloaded to `./data/combined_v4/` automatically on first run.
+
+### 3. (Optional) Test Your Setup
+
+```bash
+python test_setup.py --coco-dir ./data/combined_v4 --images-dir ./data/combined_v4
+```
+
 ## Usage
 
-### Basic Training
+### Default (auto-download from HuggingFace)
 
 ```bash
 python train_pattern_segmentation.py \
-    --coco-dir /path/to/coco/annotations \
-    --images-dir /path/to/images \
+    --batch-size 8 \
+    --epochs 22
+```
+
+### With a local dataset
+
+```bash
+python train_pattern_segmentation.py \
+    --coco-dir /path/to/combined_v4 \
+    --images-dir /path/to/combined_v4 \
     --batch-size 8 \
     --epochs 22
 ```
@@ -68,8 +77,6 @@ The script automatically detects and uses all available GPUs:
 
 ```bash
 python train_pattern_segmentation.py \
-    --coco-dir /path/to/data \
-    --images-dir /path/to/data \
     --batch-size 16 \
     --num-workers 8
 ```
@@ -78,8 +85,6 @@ python train_pattern_segmentation.py \
 
 ```bash
 python train_pattern_segmentation.py \
-    --coco-dir /path/to/data \
-    --images-dir /path/to/data \
     --resume checkpoints/last.pth
 ```
 
@@ -87,18 +92,26 @@ python train_pattern_segmentation.py \
 
 ```bash
 python train_pattern_segmentation.py \
-    --coco-dir /path/to/data \
-    --images-dir /path/to/data \
     --visualize \
     --num-viz-images 8
+```
+
+### Gated dataset (HuggingFace token required)
+
+```bash
+export HF_TOKEN=hf_...
+./run_training.sh
 ```
 
 ## Command-Line Arguments
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--coco-dir` | Required | Directory containing COCO JSON files |
-| `--images-dir` | Required | Directory containing images |
+| `--hf-repo` | `abshetty/combined_v4` | HuggingFace dataset repo ID |
+| `--hf-filename` | `combined_v4.zip` | Zip filename in the HuggingFace repo |
+| `--data-dir` | `./data` | Local directory to download/extract dataset into |
+| `--coco-dir` | None | COCO JSON directory (skips HuggingFace download) |
+| `--images-dir` | None | Images directory (skips HuggingFace download) |
 | `--batch-size` | 4 | Batch size for training |
 | `--epochs` | 22 | Number of training epochs |
 | `--lr` | 1e-4 | Learning rate |
@@ -132,10 +145,10 @@ python train_pattern_segmentation.py \
 
 ## Dataset Format
 
-The training script expects COCO format annotations:
+The training script uses [abshetty/combined_v4](https://huggingface.co/datasets/abshetty/combined_v4), which is downloaded and extracted automatically. The dataset uses COCO format with images and annotations in the same flat directory:
 
 ```
-data/
+data/combined_v4/
 ├── image1.png
 ├── image1_coco.json
 ├── image2.png
@@ -143,8 +156,8 @@ data/
 └── ...
 ```
 
-Each COCO file should contain:
-- `images`: Image metadata
+Each COCO JSON file contains:
+- `images`: Image metadata (height, width)
 - `annotations`: Segmentation annotations with polygon coordinates
 - `categories`: Pattern categories
 
