@@ -704,7 +704,7 @@ def calculate_metrics(pred, target, threshold=0.5):
 class Trainer:
     """Trainer class for pattern segmentation model."""
     def __init__(self, model, train_loader, val_loader, device,
-                 lr=1e-4, checkpoint_dir='checkpoints', log_dir='logs'):
+                 lr=1e-4, checkpoint_dir='checkpoints', log_dir='logs', step_size=8):
         self.model = model.to(device)
         if torch.cuda.device_count() > 1:
             print(f"Using {torch.cuda.device_count()} GPUs!")
@@ -727,7 +727,7 @@ class Trainer:
                         if 'ref_module' in n], 'lr': 5e-5},
         ])
         self.scheduler = optim.lr_scheduler.StepLR(
-            self.optimizer, step_size=8, gamma=0.2)
+            self.optimizer, step_size=step_size, gamma=0.2)
 
         # Checkpointing
         self.checkpoint_dir = Path(checkpoint_dir)
@@ -1013,6 +1013,8 @@ def parse_args():
                         help='Batch size for training (default: 4)')
     parser.add_argument('--epochs', type=int, default=22,
                         help='Number of training epochs (default: 22)')
+    parser.add_argument('--step-size', type=int, default=8,
+                        help='LR scheduler step size in epochs (default: 8)')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='Learning rate (default: 1e-4)')
     parser.add_argument('--num-workers', type=int, default=2,
@@ -1090,7 +1092,8 @@ def main():
         model, train_loader, val_loader, device,
         lr=args.lr,
         checkpoint_dir=args.checkpoint_dir,
-        log_dir=args.log_dir
+        log_dir=args.log_dir,
+        step_size=args.step_size
     )
 
     # Resume from checkpoint if specified
