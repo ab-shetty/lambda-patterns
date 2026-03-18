@@ -10,6 +10,7 @@ import random
 import shutil
 import tempfile
 import time
+import zipfile
 from pathlib import Path
 
 import cv2
@@ -28,6 +29,55 @@ from albumentations.pytorch import ToTensorV2
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend for server environments
 import matplotlib.pyplot as plt
+
+
+# ============================================================================
+# DATASET DOWNLOAD
+# ============================================================================
+
+def download_and_extract_dataset(repo_id='abshetty/combined_v4',
+                                  filename='combined_v4.zip',
+                                  data_dir='./data'):
+    """
+    Download and extract the dataset from HuggingFace Hub.
+    Returns the path to the extracted dataset directory.
+    """
+    from huggingface_hub import hf_hub_download
+
+    data_dir = Path(data_dir)
+    extract_dir = data_dir / Path(filename).stem  # e.g. ./data/combined_v4
+
+    if extract_dir.exists() and any(extract_dir.glob('*_coco.json')):
+        print(f"Dataset already extracted at {extract_dir}, skipping download.")
+        return extract_dir
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"Downloading {filename} from {repo_id} ...")
+    zip_path = hf_hub_download(
+        repo_id=repo_id,
+        filename=filename,
+        repo_type='dataset',
+        local_dir=str(data_dir),
+    )
+    print(f"Downloaded to {zip_path}")
+
+    print(f"Extracting to {extract_dir} ...")
+    with zipfile.ZipFile(zip_path, 'r') as zf:
+        zf.extractall(data_dir)
+
+    # The zip may extract into a sub-folder with the same stem name, or directly
+    # into data_dir. Detect the actual content directory.
+    if not extract_dir.exists():
+        # Look for any directory created under data_dir
+        subdirs = [p for p in data_dir.iterdir() if p.is_dir()]
+        if subdirs:
+            extract_dir = subdirs[0]
+        else:
+            extract_dir = data_dir
+
+    print(f"Dataset ready at {extract_dir}")
+    return extract_dir
 
 
 # ============================================================================
@@ -944,11 +994,19 @@ def visualize_predictions(model, dataset, device, num_images=4, output_path='pre
 def parse_args():
     parser = argparse.ArgumentParser(description='Train Pattern Segmentation Model')
 
-    # Data paths
-    parser.add_argument('--coco-dir', type=str, required=True,
-                        help='Directory containing COCO JSON files')
-    parser.add_argument('--images-dir', type=str, required=True,
-                        help='Directory containing images')
+    # Data paths (auto-downloaded from HuggingFace if not provided)
+    parser.add_argument('--coco-dir', type=str, default=None,
+                        help='Directory containing COCO JSON files (overrides HuggingFace download)')
+    parser.add_argument('--images-dir', type=str, default=None,
+                        help='Directory containing images (overrides HuggingFace download)')
+
+    # HuggingFace dataset download
+    parser.add_argument('--hf-repo', type=str, default='abshetty/combined_v4',
+                        help='HuggingFace dataset repo ID (default: abshetty/combined_v4)')
+    parser.add_argument('--hf-filename', type=str, default='combined_v4.zip',
+                        help='Zip filename in the HuggingFace repo (default: combined_v4.zip)')
+    parser.add_argument('--data-dir', type=str, default='./data',
+                        help='Local directory to download/extract dataset into (default: ./data)')
 
     # Training parameters
     parser.add_argument('--batch-size', type=int, default=4,
@@ -997,10 +1055,23 @@ def main():
         print(f"GPU: {torch.cuda.get_device_name(0)}")
         print(f"Available GPUs: {torch.cuda.device_count()}")
 
+    # Resolve data directories (download from HuggingFace if not provided locally)
+    if args.coco_dir and args.images_dir:
+        coco_dir = args.coco_dir
+        images_dir = args.images_dir
+    else:
+        dataset_dir = download_and_extract_dataset(
+            repo_id=args.hf_repo,
+            filename=args.hf_filename,
+            data_dir=args.data_dir,
+        )
+        coco_dir = str(dataset_dir)
+        images_dir = str(dataset_dir)
+
     # Create dataloaders
     print("\nPreparing data...")
     train_loader, val_loader, temp_dir = create_dataloaders(
-        args.coco_dir, args.images_dir,
+        coco_dir, images_dir,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         train_split=args.train_split,
