@@ -121,11 +121,23 @@ python train_pattern_segmentation.py \
 
 ### 7. **Enhanced Data Augmentation**
 
-**Current augmentations:**
+**Context:** Model is only used on electronic PDFs (never scanned). This rules out scan-artifact augmentations.
+
+**❌ Do NOT add (not present in electronic PDFs):**
+- Gaussian noise
+- Blur (Gaussian, Motion)
+- JPEG compression artifacts
+- Elastic transforms
+- Perspective/distortion transforms
+- Heavy brightness variation
+- GridDistortion
+- Scale/zoom variations (users always select the full pattern region, so scale is consistent)
+
+**Current augmentations (keep):**
 - Horizontal/vertical flips (50%)
 - Random rotation (90°, 180°, 270°)
 
-**Add these:**
+**Add:**
 
 ```python
 self.transform = A.Compose([
@@ -134,36 +146,31 @@ self.transform = A.Compose([
     A.VerticalFlip(p=0.5),
     A.RandomRotate90(p=1.0),
 
-    # New augmentations
+    # Color variation — patterns come in many colors
     A.ColorJitter(
-        brightness=0.2,
-        contrast=0.2,
-        saturation=0.1,
-        hue=0.05,
+        brightness=0.15,
+        contrast=0.15,
+        saturation=0.2,
+        hue=0.1,
         p=0.5
     ),
-    A.GaussNoise(var_limit=(10.0, 50.0), p=0.3),
-    A.GaussianBlur(blur_limit=(3, 7), p=0.2),
+
+    # Occlusion — text, images, and other elements realistically cover parts of patterns
     A.CoarseDropout(
         max_holes=8,
         max_height=32,
         max_width=32,
         p=0.3
     ),
-    A.ElasticTransform(
-        alpha=50,
-        sigma=5,
-        p=0.2
-    ),
 ])
 ```
 
 **Why it works:**
-- Better generalization to real PDFs
-- Prevents overfitting
-- Handles varied image qualities
+- Color jitter handles the variety of pattern colors in real documents
+- CoarseDropout simulates other page elements (text blocks, images) occluding patterns
+- Nothing here introduces artifacts that don't exist in real electronic PDFs
 
-**Expected improvement:** +1-2% IoU on real data
+**Expected improvement:** +1-2% real PDF IoU (better domain match)
 
 ---
 
