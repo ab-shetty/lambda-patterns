@@ -6,12 +6,13 @@
 |-----|---------|--------|-------------|---------|------|-------|
 | Run 1 | 3K images | 22 | 0.8993 | 0.9337 | ~7.5hr | Baseline, step_size=8 |
 | Run 2 | 15K images | 7 (abandoned) | 0.9174 | 0.9448 | - | Too slow, step_size=8 |
-| **Run 3** | **15K images** | **18** | **0.9346** | **0.9565** | **~3.3hr** | **step_size=5 ✅** |
+| Run 3 | 15K images | 18 | 0.9346 | 0.9565 | ~3.3hr | step_size=5 ✅ |
+| **Run 4** | **15K images** | **18** | **0.9344** | **0.9553** | **~3.9hr** | **dim=768 — no improvement** |
 
-**Current best: 0.9346 validation IoU (93.46%)**
-Real-world performance: **0.75 median IoU** on real PDFs (automatic patch selection)
+**Current best: 0.9346 validation IoU (93.46%)** (Run 3, dim=512)
+Real-world performance: **0.82 median IoU** on real PDFs (automatic patch selection)
 
-**Key finding from Run 3:** Model plateaus at ~0.934-0.935 with current architecture and 15K dataset — train and val IoU both flatline after epoch 11. To push past 0.935, need more data or a larger model.
+**Key finding from Runs 3 & 4:** Model plateaus at ~0.934-0.935 regardless of model size. dim=768 matched dim=512 exactly (0.9344 vs 0.9346) while being 20% slower. **The bottleneck is the data, not model capacity.** To push past 0.935, more synthetic data is the only lever.
 
 This document outlines strategies to push performance higher, leveraging the GH200's massive compute capabilities.
 
@@ -96,26 +97,12 @@ python train_pattern_segmentation.py \
 
 ---
 
-### 6. **Larger Model Capacity**
+### 6. ~~**Larger Model Capacity**~~ — Ruled Out
 
-**Current:** `ref_feature_dim=512` (~58M parameters)
-**Recommended:** `ref_feature_dim=768` (~90M) or `1024` (~130M)
+**Tested:** dim=512 vs dim=768 on 15K images
+**Result:** 0.9346 vs 0.9344 — identical, within noise. 20% slower training for zero gain.
 
-```bash
-python train_pattern_segmentation.py \
-    --ref-feature-dim 768 \
-    --batch-size 32 \  # Adjust based on memory
-    --epochs 40
-```
-
-**Why it works:**
-- More capacity for complex pattern matching
-- Better cross-attention representations
-- Diminishing returns above 1024
-
-**Expected improvement:** +1-2% IoU → **0.93-0.94 IoU**
-
-**Note:** Larger models need more data/epochs to converge fully
+**Conclusion:** dim=512 is the settled configuration. The architecture has sufficient capacity for the current dataset. Larger models will not help until the dataset is significantly expanded (30K+).
 
 ---
 
@@ -294,19 +281,20 @@ Average their predictions during inference.
 **Target:** 0.9346 → **0.95+ IoU**
 **Why:** Model has plateaued at current data ceiling — more data is the clearest path forward.
 
-### Phase 2: Model Scaling
+### Phase 2: Augmentation + More Data
 
-1. **Larger model:** `--ref-feature-dim 768`
-2. **Enhanced augmentation** (color jitter, noise, elastic transforms)
-3. **TTA for evaluation** (no retraining needed, free +2-4%)
+1. **Add color jitter + CoarseDropout** — may improve real PDF IoU even if val stays flat
+2. **Generate 30K+ synthetic images** — only thing that will move val IoU past 0.935
+3. ~~Larger model (dim=768)~~ — ruled out, no benefit on 15K dataset
+4. ~~TTA~~ — ruled out, negligible benefit
 
-**Target:** 0.95 → **0.96-0.97 IoU**
+**Target:** 0.9346 → **0.95+ val IoU**, **0.85+ real PDF IoU**
 
 ### Phase 3: Advanced (1 week)
 
 1. **Self-training on real PDFs**
 2. **Model ensemble**
-3. **Architecture improvements** (ResNet101, more attention heads)
+3. **Architecture improvements** (ResNet101, more attention heads) — only worth trying after 30K+ dataset
 
 **Target:** 0.96-0.97 → **0.97+ IoU**
 
@@ -335,8 +323,8 @@ Cross-attention in dec2 at 128×128 resolution generates attention matrices ~3GB
 |---------------|---------|--------------|--------|
 | Run 1 (3K images) | 0.8993 | ~0.75 | - |
 | **Run 3 (15K images)** | **0.9346** | **~0.80?** | - |
-| Phase 1.5 (30K images) | 0.95+ | 0.83-0.86 | Low |
-| Phase 2 (larger model + augmentation) | 0.96-0.97 | 0.86-0.89 | Medium |
+| Phase 1.5 (augmentation only) | ~0.935 | 0.83-0.85 | Low |
+| Phase 2 (30K images + augmentation) | 0.95+ | 0.85-0.87 | Medium |
 | Phase 3 (self-training + ensemble) | 0.97+ | 0.89+ | High |
 
 ---
