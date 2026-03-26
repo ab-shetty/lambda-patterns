@@ -745,7 +745,7 @@ class Trainer:
         self.writer = SummaryWriter(log_dir)
 
         # AMP scaler
-        self.scaler = torch.cuda.amp.GradScaler()
+        self.scaler = torch.amp.GradScaler('cuda')
 
         # Tracking
         self.best_val_loss = float('inf')
@@ -768,9 +768,9 @@ class Trainer:
 
             # Forward pass
             self.optimizer.zero_grad()
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast('cuda'):
                 outputs = self.model(images, references)
-                loss = self.criterion(outputs, masks)
+            loss = self.criterion(outputs, masks)
 
             # Backward pass
             self.scaler.scale(loss).backward()
