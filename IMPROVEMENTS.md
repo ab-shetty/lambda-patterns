@@ -268,7 +268,7 @@ Average their predictions during inference.
 
 **Achieved:** 0.9346 → **0.9463 IoU** (+1.17%) ✅
 
-**Next:** 60K+ images to push past 0.95. Returns are diminishing (~1% per 2x) so need to combine with augmentation changes.
+**Next:** 60K+ images. Only two data points so far, so returns are unpredictable — combine with augmentation changes regardless.
 
 ### Phase 2: Augmentation + More Data
 
