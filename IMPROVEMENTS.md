@@ -2,16 +2,18 @@
 
 ## Training History
 
-| Run | Dataset | Epochs | Best Val IoU | Best F1 | Time | Notes |
-|-----|---------|--------|-------------|---------|------|-------|
-| Run 1 | 3K images | 22 | 0.8993 | 0.9337 | ~7.5hr | Baseline, step_size=8 |
-| Run 2 | 15K images | 7 (abandoned) | 0.9174 | 0.9448 | - | Too slow, step_size=8 |
-| Run 3 | 15K images | 18 | 0.9346 | 0.9565 | ~3.3hr | step_size=5 ✅ |
-| Run 4 | 15K images | 18 | 0.9344 | 0.9553 | ~3.9hr | dim=768 — no improvement |
-| **Run 5** | **30K images** | **17** | **0.9463** | **0.9637** | **~6.1hr** | **+1.17% from 2x data ✅** |
+| Run | Dataset | Epochs | Best Val IoU | Best F1 | Real PDF mIoU | Time | Notes |
+|-----|---------|--------|-------------|---------|--------------|------|-------|
+| Run 1 | 3K images | 22 | 0.8993 | 0.9337 | 0.74 | ~7.5hr | Baseline, step_size=8 |
+| Run 2 | 15K images | 7 (abandoned) | 0.9174 | 0.9448 | — | — | Too slow, step_size=8 |
+| Run 3 | 15K images | 18 | 0.9346 | 0.9565 | **0.82** | ~3.3hr | step_size=5 ✅ |
+| Run 4 | 15K images | 18 | 0.9344 | 0.9553 | — | ~3.9hr | dim=768 — no improvement |
+| **Run 5** | **30K images** | **17** | **0.9463** | **0.9637** | **0.79** | **~6.1hr** | **Val ↑ but real PDF ↓** |
 
-**Current best: 0.9463 validation IoU (94.63%)** (Run 5, dim=512, 30K images)
-Real-world performance: **0.82 median IoU** on real PDFs (not yet re-evaluated with Run 5 model)
+**Current best val IoU: 0.9463** (Run 5, dim=512, 30K images)
+**Current best real PDF mIoU: 0.82** (Run 3, 15K images)
+
+⚠️ Run 5 regressed on real PDFs (0.82 → 0.79) despite improving val IoU. More synthetic data is widening the synthetic→real gap. Augmentation changes are now the priority.
 
 **Data scaling confirmed:** Each 2x increase in dataset raises the ceiling by ~1%:
 - 3K → 15K: 0.8993 → 0.9346 (+3.5%)
@@ -147,20 +149,13 @@ self.transform = A.Compose([
         p=0.5
     ),
 
-    # Occlusion — text, images, and other elements realistically cover parts of patterns
-    A.CoarseDropout(
-        max_holes=8,
-        max_height=32,
-        max_width=32,
-        p=0.3
-    ),
 ])
 ```
 
 **Why it works:**
 - Color jitter handles the variety of pattern colors in real documents
-- CoarseDropout simulates other page elements (text blocks, images) occluding patterns
-- Nothing here introduces artifacts that don't exist in real electronic PDFs
+
+**Why CoarseDropout was excluded:** Real wall images contain windows, which appear as natural holes in the mask (windows are excluded from the tiling/piping pattern area). Adding artificial rectangular holes would create image/mask inconsistency and confuse the model.
 
 **Expected improvement:** +1-2% real PDF IoU (better domain match)
 
