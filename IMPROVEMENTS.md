@@ -7,12 +7,17 @@
 | Run 1 | 3K images | 22 | 0.8993 | 0.9337 | ~7.5hr | Baseline, step_size=8 |
 | Run 2 | 15K images | 7 (abandoned) | 0.9174 | 0.9448 | - | Too slow, step_size=8 |
 | Run 3 | 15K images | 18 | 0.9346 | 0.9565 | ~3.3hr | step_size=5 ✅ |
-| **Run 4** | **15K images** | **18** | **0.9344** | **0.9553** | **~3.9hr** | **dim=768 — no improvement** |
+| Run 4 | 15K images | 18 | 0.9344 | 0.9553 | ~3.9hr | dim=768 — no improvement |
+| **Run 5** | **30K images** | **17** | **0.9463** | **0.9637** | **~6.1hr** | **+1.17% from 2x data ✅** |
 
-**Current best: 0.9346 validation IoU (93.46%)** (Run 3, dim=512)
-Real-world performance: **0.82 median IoU** on real PDFs (automatic patch selection)
+**Current best: 0.9463 validation IoU (94.63%)** (Run 5, dim=512, 30K images)
+Real-world performance: **0.82 median IoU** on real PDFs (not yet re-evaluated with Run 5 model)
 
-**Key finding from Runs 3 & 4:** Model plateaus at ~0.934-0.935 regardless of model size. dim=768 matched dim=512 exactly (0.9344 vs 0.9346) while being 20% slower. **The bottleneck is the data, not model capacity.** To push past 0.935, more synthetic data is the only lever.
+**Data scaling confirmed:** Each 2x increase in dataset raises the ceiling by ~1%:
+- 3K → 15K: 0.8993 → 0.9346 (+3.5%)
+- 15K → 30K: 0.9346 → 0.9463 (+1.17%)
+
+**Key finding from Run 5:** Same plateau pattern as before — train IoU flatlines (0.9447 → 0.9460 over 6 epochs). Val IoU variance masks this but the model has hit ~0.946 ceiling. More epochs won't help. Need more data to push further.
 
 This document outlines strategies to push performance higher, leveraging the GH200's massive compute capabilities.
 
@@ -256,14 +261,14 @@ Average their predictions during inference.
 
 **Achieved:** 0.90 → **0.9346 IoU** ✅
 
-### Phase 1.5: Data Generation (next step)
+### Phase 1.5: Data Generation ✅ DONE
 
-1. **Generate 30,000 synthetic images** (2x current)
-2. **Target failure cases:** Use low-IoU visualizations to identify gaps
-3. **Retrain:** `--batch-size 16 --epochs 18 --step-size 5`
+1. ✅ Generated 30K images (2x from 15K)
+2. ✅ Retrained: `--batch-size 16 --epochs 17 --step-size 5`
 
-**Target:** 0.9346 → **0.95+ IoU**
-**Why:** Model has plateaued at current data ceiling — more data is the clearest path forward.
+**Achieved:** 0.9346 → **0.9463 IoU** (+1.17%) ✅
+
+**Next:** 60K+ images to push past 0.95. Returns are diminishing (~1% per 2x) so need to combine with augmentation changes.
 
 ### Phase 2: Augmentation + More Data
 
@@ -307,8 +312,8 @@ Cross-attention in dec2 at 128×128 resolution generates attention matrices ~3GB
 |---------------|---------|--------------|--------|
 | Run 1 (3K images) | 0.8993 | ~0.75 | - |
 | **Run 3 (15K images)** | **0.9346** | **~0.80?** | - |
-| Phase 1.5 (augmentation only) | ~0.935 | 0.83-0.85 | Low |
-| Phase 2 (30K images + augmentation) | 0.95+ | 0.85-0.87 | Medium |
+| Phase 1.5 (30K images) ✅ | **0.9463** | TBD | Done |
+| Phase 2 (60K+ images + augmentation) | 0.95-0.96 | 0.85-0.87 | Medium |
 | Phase 3 (self-training + ensemble) | 0.97+ | 0.89+ | High |
 
 ---
