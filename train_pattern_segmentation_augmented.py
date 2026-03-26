@@ -232,7 +232,7 @@ class PatternSegmentationDataset(Dataset):
                 A.HorizontalFlip(p=0.5),
                 A.VerticalFlip(p=0.5),
                 A.RandomRotate90(p=1.0),
-            ])
+            ], additional_targets={'mask2': 'mask'})
         else:
             self.color_jitter = None
             self.transform = None
@@ -308,33 +308,28 @@ class PatternSegmentationDataset(Dataset):
         # Sample reference patch bbox
         patch_bbox = sample_random_patch(selected_mask, self.min_patch_size, self.max_patch_size)
 
-        # Apply color jitter to full image before extracting reference patch
-        # so both naturally share the same color shift
+        # Apply color jitter to full image first so both image and reference
+        # naturally share the same color shift
         if self.color_jitter is not None:
             image = self.color_jitter(image=image)['image']
 
-        # Extract reference patch after color jitter, before spatial augmentation
-        x, y, w, h = patch_bbox
-        reference_patch = image[y:y+h, x:x+w].copy()
-
-        # Apply SAME augmentation to image, mask, and reference patch
+        # Apply spatial augmentation to full image + masks before extracting
+        # reference patch, so reference and target share the same orientation
         if self.transform is not None:
-            seed = np.random.randint(0, 2**32 - 1)
-
-            np.random.seed(seed)
-            random.seed(seed)
-            transformed = self.transform(image=image, mask=target_mask)
+            transformed = self.transform(image=image, mask=target_mask, mask2=selected_mask)
             image_aug = transformed['image']
             mask_aug = transformed['mask']
-
-            np.random.seed(seed)
-            random.seed(seed)
-            transformed_ref = self.transform(image=reference_patch)
-            reference_aug = transformed_ref['image']
+            selected_mask_aug = transformed['mask2']
         else:
             image_aug = image
             mask_aug = target_mask
-            reference_aug = reference_patch
+            selected_mask_aug = selected_mask
+
+        # Re-sample reference patch bbox from augmented selected_mask
+        patch_bbox = sample_random_patch(selected_mask_aug, self.min_patch_size, self.max_patch_size)
+        x, y, w, h = patch_bbox
+        reference_patch = image_aug[y:y+h, x:x+w].copy()
+        reference_aug = reference_patch
 
         # Resize image and mask
         image_resized = cv2.resize(image_aug, (self.image_size, self.image_size))
