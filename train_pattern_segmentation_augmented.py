@@ -770,7 +770,7 @@ class Trainer:
             self.optimizer.zero_grad()
             with torch.amp.autocast('cuda'):
                 outputs = self.model(images, references)
-            loss = self.criterion(outputs, masks)
+            loss = self.criterion(outputs.float(), masks)
 
             # Backward pass
             self.scaler.scale(loss).backward()
