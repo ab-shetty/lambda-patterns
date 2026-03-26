@@ -746,8 +746,6 @@ class Trainer:
         # Logging
         self.writer = SummaryWriter(log_dir)
 
-        # AMP scaler
-        self.scaler = torch.amp.GradScaler('cuda')
 
         # Tracking
         self.best_val_loss = float('inf')
@@ -770,14 +768,12 @@ class Trainer:
 
             # Forward pass
             self.optimizer.zero_grad()
-            with torch.amp.autocast('cuda'):
-                outputs = self.model(images, references)
-            loss = self.criterion(outputs.float(), masks)
+            outputs = self.model(images, references)
+            loss = self.criterion(outputs, masks)
 
             # Backward pass
-            self.scaler.scale(loss).backward()
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
+            loss.backward()
+            self.optimizer.step()
 
             # Calculate metrics
             with torch.no_grad():
@@ -857,7 +853,6 @@ class Trainer:
             'model_state_dict': model_state,
             'optimizer_state_dict': self.optimizer.state_dict(),
             'scheduler_state_dict': self.scheduler.state_dict(),
-            'scaler_state_dict': self.scaler.state_dict(),
             'best_val_loss': self.best_val_loss,
             'best_val_iou': self.best_val_iou
         }
@@ -870,8 +865,6 @@ class Trainer:
         model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        if 'scaler_state_dict' in checkpoint:
-            self.scaler.load_state_dict(checkpoint['scaler_state_dict'])
         self.epoch = checkpoint['epoch']
         self.best_val_loss = checkpoint['best_val_loss']
         self.best_val_iou = checkpoint['best_val_iou']
