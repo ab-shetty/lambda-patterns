@@ -219,20 +219,22 @@ class PatternSegmentationDataset(Dataset):
 
         # Augmentation transforms
         if augment:
+            # ColorJitter applied to full image before reference extraction so
+            # both image and reference naturally share the same color shift
+            self.color_jitter = A.ColorJitter(
+                brightness=0.15,
+                contrast=0.15,
+                saturation=0.2,
+                hue=0.1,
+                p=0.5
+            )
             self.transform = A.Compose([
                 A.HorizontalFlip(p=0.5),
                 A.VerticalFlip(p=0.5),
                 A.RandomRotate90(p=1.0),
-                # Color variation — patterns come in many colors across real PDFs
-                A.ColorJitter(
-                    brightness=0.15,
-                    contrast=0.15,
-                    saturation=0.2,
-                    hue=0.1,
-                    p=0.5
-                ),
             ])
         else:
+            self.color_jitter = None
             self.transform = None
 
         # Normalization (ImageNet stats)
@@ -306,7 +308,12 @@ class PatternSegmentationDataset(Dataset):
         # Sample reference patch bbox
         patch_bbox = sample_random_patch(selected_mask, self.min_patch_size, self.max_patch_size)
 
-        # Extract reference patch BEFORE augmentation
+        # Apply color jitter to full image before extracting reference patch
+        # so both naturally share the same color shift
+        if self.color_jitter is not None:
+            image = self.color_jitter(image=image)['image']
+
+        # Extract reference patch after color jitter, before spatial augmentation
         x, y, w, h = patch_bbox
         reference_patch = image[y:y+h, x:x+w].copy()
 
