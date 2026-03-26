@@ -180,37 +180,21 @@ self.transform = A.Compose([
 
 ## Advanced Techniques (More Work)
 
-### 9. **Test-Time Augmentation (TTA)**
+### 9. ~~**Test-Time Augmentation (TTA)**~~ — Ruled Out
 
-Apply augmentations during inference, average predictions:
+**Tested:** Two approaches on 51 real PDF samples (baseline median IoU: 0.82)
 
-```python
-def predict_with_tta(model, image, reference):
-    preds = []
+| Approach | Median IoU | IoU < 0.50 |
+|----------|-----------|------------|
+| Baseline (no TTA) | 0.82 | 11 samples |
+| TTA approach 1 (image flips, fixed ref) | 0.8148 | 6 samples |
+| TTA approach 2 (image + ref flips) | 0.8259 | 7 samples |
 
-    # Original
-    pred = model(image, reference)
-    preds.append(pred)
+**Result:** Negligible change on median IoU (~0 to +0.006). Not worth 3-7× inference slowdown.
 
-    # Horizontal flip
-    pred_hflip = model(
-        torch.flip(image, [-1]),
-        reference
-    )
-    preds.append(torch.flip(pred_hflip, [-1]))
+**Why it doesn't help:** The failure mode is **bad reference patch selection**, not model uncertainty on the image. TTA over image augmentations can't fix a poorly chosen reference. To benefit from TTA you'd need to average over multiple reference patches — which isn't practical in production.
 
-    # Vertical flip
-    pred_vflip = model(
-        torch.flip(image, [-2]),
-        reference
-    )
-    preds.append(torch.flip(pred_vflip, [-2]))
-
-    # Average all predictions
-    return torch.stack(preds).mean(dim=0)
-```
-
-**Expected improvement:** +2-4% IoU (inference only, no retraining needed!)
+**One minor positive:** IoU < 0.50 dropped from 11 → 6-7 samples, so TTA marginally helps the worst cases. Still not worth it overall.
 
 ---
 
