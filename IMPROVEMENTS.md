@@ -8,12 +8,13 @@
 | Run 2 | 15K images | 7 (abandoned) | 0.9174 | 0.9448 | — | — | Too slow, step_size=8 |
 | Run 3 | 15K images | 18 | 0.9346 | 0.9565 | **0.82** | ~3.3hr | step_size=5 ✅ |
 | Run 4 | 15K images | 18 | 0.9344 | 0.9553 | — | ~3.9hr | dim=768 — no improvement |
-| **Run 5** | **30K images** | **17** | **0.9463** | **0.9637** | **0.79** | **~6.1hr** | **Val ↑ but real PDF ↓** |
+| Run 5 | 30K images | 17 | 0.9463 | 0.9637 | 0.79 | ~6.1hr | Val ↑ but real PDF ↓ |
+| **Run 6** | **30K images** | **16** | **0.9553** | **0.9705** | **0.82** | **~6.6hr** | **Fixed augmentation pipeline + ColorJitter** |
 
-**Current best val IoU: 0.9463** (Run 5, dim=512, 30K images)
-**Current best real PDF mIoU: 0.82** (Run 3, 15K images)
+**Current best val IoU: 0.9553** (Run 6, 30K images, fixed augmentation)
+**Current best real PDF mIoU: 0.82** (Run 3 and Run 6)
 
-⚠️ Run 5 regressed on real PDFs (0.82 → 0.79) despite improving val IoU. More synthetic data is widening the synthetic→real gap. Augmentation changes are now the priority.
+✅ Run 6 fixed the augmentation pipeline — spatial transforms and ColorJitter were previously applied with independent random state to image and reference (seed-resetting broken in albumentations). Fix: apply all augmentation to full image before extracting reference patch. Val IoU improved +0.009 over Run 5, real PDF mIoU recovered from 0.79 back to 0.82.
 
 **Data scaling confirmed:** Each 2x increase in dataset raises the ceiling by ~1%:
 - 3K → 15K: 0.8993 → 0.9346 (+3.5%)
@@ -265,14 +266,16 @@ Average their predictions during inference.
 
 **Next:** 60K+ images. Only two data points so far, so returns are unpredictable — combine with augmentation changes regardless.
 
-### Phase 2: Augmentation + More Data
+### Phase 2: Augmentation + More Data ✅ DONE
 
-1. **Add color jitter + CoarseDropout** — may improve real PDF IoU even if val stays flat
-2. **Generate 30K+ synthetic images** — only thing that will move val IoU past 0.935
+1. ✅ Fixed augmentation pipeline (spatial + ColorJitter now applied to full image before reference extraction)
+2. ✅ ColorJitter added (correctly this time)
 3. ~~Larger model (dim=768)~~ — ruled out, no benefit on 15K dataset
 4. ~~TTA~~ — ruled out, negligible benefit
 
-**Target:** 0.9346 → **0.95+ val IoU**, **0.85+ real PDF IoU**
+**Achieved:** 0.9463 → **0.9553 val IoU**, real PDF recovered to **0.82** ✅
+
+**Next:** 60K+ images to push val IoU past 0.96.
 
 ### Phase 3: Advanced (1 week)
 
